@@ -1,0 +1,28 @@
+# Пути и общие константы.
+
+import os
+from datetime import date
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+# Датасет лежит в data/ или в папке из X5_DATA_DIR.
+DATA_DIR = Path(os.environ.get("X5_DATA_DIR", ROOT / "data"))
+RAW_DIR = DATA_DIR / "raw"
+TRAIN_CSV = RAW_DIR / "uplift_train.csv.gz"
+CLIENTS_CSV = RAW_DIR / "clients.csv.gz"
+PURCHASES_CSV = RAW_DIR / "purchases.csv.gz"
+PURCHASES_PARQUET = DATA_DIR / "purchases.parquet"
+SPLIT_PARQUET = DATA_DIR / "split.parquet"
+SQL_DIR = ROOT / "sql"
+
+SEED = 42
+SPLIT_SHARES = {"train": 0.6, "valid": 0.2, "test": 0.2}
+
+# Последний день истории, который считаем «до коммуникации». Пока это последний день в purchases;
+# может сдвинуться раньше после проверки на этапе 2.
+CUTOFF = date(2019, 3, 18)
+
+# Возраст вне [AGE_MIN, AGE_MAX] считаю ошибкой и заменяю на NULL.
+AGE_MIN = 14
+AGE_MAX = 100

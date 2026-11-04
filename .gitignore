@@ -1,0 +1,12 @@
+# датасет и производные таблицы
+data/
+
+# артефакты моделей
+artifacts/
+
+# окружение
+.venv/
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
