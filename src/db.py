@@ -10,6 +10,7 @@ from . import config
 
 def connect() -> duckdb.DuckDBPyConnection:
     con = duckdb.connect()
+    con.execute("set enable_progress_bar = false")
     for name, value in {
         "train_csv": config.TRAIN_CSV,
         "clients_csv": config.CLIENTS_CSV,
