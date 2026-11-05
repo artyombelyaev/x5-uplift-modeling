@@ -9,6 +9,9 @@ IMAGES_DIR = ROOT / "images"
 
 # одинаковые цвета для групп во всех графиках
 GROUP_COLORS = {"control": "#2a78d6", "treatment": "#eb6834"}
+# цвета моделей не пересекаются с цветами групп
+MODEL_COLORS = {"response": "#8c6bb1", "t_learner": "#1b9e77", "class_transformation": "#c49a00"}
+MODEL_NAMES = {"response": "модель отклика", "t_learner": "T-learner", "class_transformation": "трансформация классов"}
 INK = "#52514e"
 GRID = "#e4e3df"
 
