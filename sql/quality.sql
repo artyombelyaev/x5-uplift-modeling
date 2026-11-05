@@ -418,3 +418,19 @@ select
     count(*) filter (where last_dt < (select last_dt from h) - interval 30 day) as no_purchases_last_30d,
     max(date_diff('day', last_dt, (select last_dt from h))) as max_days_since_last
 from per_client;
+
+-- name: activity_window
+-- Окно, в котором покупал каждый клиент: самая ранняя и самая поздняя дата последней покупки.
+with last as (
+    select client_id, max(transaction_datetime)::date as last_day
+    from purchases
+    group by client_id
+)
+select
+    client_id in (select client_id from uplift_train) as in_experiment,
+    count(*) as n_clients,
+    min(last_day) as earliest_last_purchase,
+    max(last_day) as latest_last_purchase
+from last
+group by 1
+order by 1 desc;
