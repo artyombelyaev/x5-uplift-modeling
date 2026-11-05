@@ -112,8 +112,9 @@ client_features as (
         gender,
         date_diff('day', first_issue_date::date, getvariable('cutoff')) as card_age_days,
         coalesce(first_redeem_date::date <= getvariable('cutoff'), false)::int as redeemed_before_cutoff,
+        -- NULL, если не списывал до CUTOFF или списание раньше выдачи карты (один клиент, аномалия из этапа 1)
         case
-            when first_redeem_date::date <= getvariable('cutoff')
+            when first_redeem_date::date <= getvariable('cutoff') and first_redeem_date::date >= first_issue_date::date
             then date_diff('day', first_issue_date::date, first_redeem_date::date)
         end as days_issue_to_redeem
     from clients
@@ -156,6 +157,67 @@ select
     max(v) as max
 from x
 group by feature;
+
+-- name: mart_constancy
+-- Почти постоянные признаки: доля ненулевых значений и доля самого частого значения (NULL - тоже значение).
+with n as (select count(*) as n from read_parquet(getvariable('features_parquet'))),
+x as (
+    unpivot (
+        select columns(* exclude (client_id, gender))::double
+        from read_parquet(getvariable('features_parquet'))
+    )
+    on columns(*) into name feature value v
+),
+counts as (
+    select feature, v, count(*) as cnt from x group by all
+),
+per_feature as (
+    select
+        feature,
+        sum(cnt) filter (where v <> 0) as n_nonzero,
+        sum(cnt) as n_not_null,
+        max(cnt) as top_count
+    from counts
+    group by feature
+)
+select
+    feature,
+    coalesce(n_nonzero, 0) / (select n from n) as nonzero_share,
+    greatest(top_count, (select n from n) - n_not_null) / (select n from n) as top_value_share
+from per_feature
+order by nonzero_share;
+
+-- name: express_windows
+-- Экспресс-баллы по окнам у клиентов эксперимента: доля клиентов с ненулевой суммой. Считается из purchases,
+-- потому что часть этих колонок в витрину не вошла.
+with trn as (
+    select
+        client_id,
+        transaction_id,
+        any_value(transaction_datetime)::date as day,
+        any_value(express_points_received) as exp_received,
+        -any_value(express_points_spent) as exp_spent
+    from purchases
+    where transaction_datetime::date <= getvariable('cutoff')
+        and client_id in (select client_id from uplift_train)
+    group by all
+),
+per_client as (
+    select
+        client_id,
+        sum(exp_received) filter (where day > getvariable('cutoff') - 7) > 0 as received_7d,
+        sum(exp_received) filter (where day > getvariable('cutoff') - 14) > 0 as received_14d,
+        sum(exp_received) filter (where day > getvariable('cutoff') - 30) > 0 as received_30d,
+        sum(exp_received) > 0 as received_all,
+        sum(exp_spent) filter (where day > getvariable('cutoff') - 7) > 0 as spent_7d,
+        sum(exp_spent) filter (where day > getvariable('cutoff') - 14) > 0 as spent_14d,
+        sum(exp_spent) filter (where day > getvariable('cutoff') - 30) > 0 as spent_30d,
+        sum(exp_spent) > 0 as spent_all
+    from trn
+    group by client_id
+)
+select avg(coalesce(columns(* exclude (client_id)), false)::int)
+from per_client;
 
 -- name: mart_gender
 select gender, count(*) as n_clients from read_parquet(getvariable('features_parquet')) group by 1 order by 1;

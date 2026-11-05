@@ -130,7 +130,8 @@ select
     avg((abs(diff) >= 1)::int) as share_mismatch_1rub,
     avg((abs(diff) >= 1 and points_spent > 0)::int) as with_points_spent,
     avg((abs(diff) >= 1 and points_spent = 0 and abs(diff) <= 0.5 * n_lines)::int) as no_spend_within_rounding,
-    avg((abs(diff) >= 1 and points_spent = 0 and abs(diff) > 0.5 * n_lines)::int) as no_spend_beyond_rounding
+    avg((abs(diff) >= 1 and points_spent = 0 and abs(diff) > 0.5 * n_lines)::int) as no_spend_beyond_rounding,
+    avg((points_spent = 0 and abs(diff) > 5)::int) as no_spend_diff_gt_5rub
 from trn;
 
 -- name: purchase_sum_mismatch_size
