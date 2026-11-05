@@ -17,9 +17,13 @@ def connect() -> duckdb.DuckDBPyConnection:
         "purchases_parquet": config.PURCHASES_PARQUET,
         "split_parquet": config.SPLIT_PARQUET,
         "features_parquet": config.FEATURES_PARQUET,
+        "features_all_parquet": config.FEATURES_ALL_PARQUET,
+        "scores_parquet": config.SCORES_PARQUET,
+        "send_shares_parquet": config.SEND_SHARES_PARQUET,
     }.items():
         con.execute(f"set variable {name} = '{value}'")
     con.execute(f"set variable cutoff = date '{config.CUTOFF}'")
+    con.execute(f"set variable r = {config.R_DEFAULT}")
     con.execute(f"set variable clients_tz_shift = {config.CLIENTS_TZ_SHIFT}")
     con.execute(f"set variable age_min = {config.AGE_MIN}")
     con.execute(f"set variable age_max = {config.AGE_MAX}")

@@ -15,6 +15,10 @@ PURCHASES_CSV = RAW_DIR / "purchases.csv.gz"
 PURCHASES_PARQUET = DATA_DIR / "purchases.parquet"
 SPLIT_PARQUET = DATA_DIR / "split.parquet"
 FEATURES_PARQUET = DATA_DIR / "features.parquet"
+FEATURES_ALL_PARQUET = DATA_DIR / "features_all.parquet"
+SCORES_PARQUET = DATA_DIR / "scores_raw.parquet"
+SEND_SHARES_PARQUET = DATA_DIR / "send_shares.parquet"
+SCORES_MART_PARQUET = DATA_DIR / "scores.parquet"
 SQL_DIR = ROOT / "sql"
 
 SEED = 42
@@ -30,3 +34,6 @@ CLIENTS_TZ_SHIFT = 3
 # Возраст вне [AGE_MIN, AGE_MAX] считаю ошибкой и заменяю на NULL.
 AGE_MIN = 14
 AGE_MAX = 100
+
+# r = C / V для флага send в витрине скоров (допущение, меняется параметром запроса).
+R_DEFAULT = 0.05

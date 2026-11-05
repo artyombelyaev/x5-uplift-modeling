@@ -1,4 +1,5 @@
--- Этап 3: витрина признаков, одна строка на клиента эксперимента.
+-- Этап 3: витрина признаков, одна строка на клиента из вьюхи population (src/features.py создаёт её:
+-- клиенты эксперимента для моделей или все клиенты clients для витрины скоров).
 -- Источники: purchases до CUTOFF включительно и clients (даты сдвинуты в staging.sql). Target и treatment
 -- не используются. Окна - последние 7, 14 и 30 дней до CUTOFF включительно и вся история.
 
@@ -17,7 +18,7 @@ with trn as (
         -any_value(express_points_spent) as exp_spent
     from purchases
     where transaction_datetime::date <= getvariable('cutoff')
-        and client_id in (select client_id from uplift_train)
+        and client_id in (select client_id from population)
     group by client_id, transaction_id
 ),
 trn_flags as (
@@ -101,7 +102,7 @@ products as (
         select client_id, product_id, transaction_datetime::date as day
         from purchases
         where transaction_datetime::date <= getvariable('cutoff')
-            and client_id in (select client_id from uplift_train)
+            and client_id in (select client_id from population)
     )
     group by client_id
 ),
@@ -124,7 +125,7 @@ select
     c.* exclude (client_id),
     t.* exclude (client_id),
     p.* exclude (client_id)
-from uplift_train u
+from population u
 left join client_features c using (client_id)
 left join trn_agg t using (client_id)
 left join products p using (client_id)
