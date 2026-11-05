@@ -45,3 +45,12 @@ def test_bootstrap_matches_normal_on_large_sample():
     assert d == pytest.approx(y_t.mean() - y_c.mean())
     assert lo == pytest.approx(nlo, abs=0.002)
     assert hi == pytest.approx(nhi, abs=0.002)
+
+
+def test_mde():
+    assert stats.mde(1.0) == pytest.approx(1.959964 + 0.841621, rel=1e-6)
+    assert stats.mde(0.01, power=0.5) == pytest.approx(0.01959964, rel=1e-6)
+
+
+def test_diff_props_se():
+    assert stats.diff_props_se(60, 100, 50, 100) == pytest.approx(np.sqrt(0.6 * 0.4 / 100 + 0.25 / 100))

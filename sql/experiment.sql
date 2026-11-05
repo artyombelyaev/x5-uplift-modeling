@@ -126,3 +126,24 @@ order by 1;
 
 -- name: target_arrays
 select treatment_flg, target from uplift_train;
+
+-- name: recent_buyers
+-- Проверка на уровне клиента: покупал ли клиент в последние 3 и 7 дней истории до CUTOFF.
+with recent as (
+    select
+        client_id,
+        max(transaction_datetime)::date > getvariable('cutoff') - interval 3 day as bought_3d,
+        max(transaction_datetime)::date > getvariable('cutoff') - interval 7 day as bought_7d
+    from purchases
+    where transaction_datetime::date <= getvariable('cutoff')
+    group by client_id
+)
+select
+    t.treatment_flg,
+    count(*) as n_clients,
+    count(*) filter (where r.bought_3d) as n_bought_3d,
+    count(*) filter (where r.bought_7d) as n_bought_7d
+from uplift_train t
+left join recent r using (client_id)
+group by 1
+order by 1;

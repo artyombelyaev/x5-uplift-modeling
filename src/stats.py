@@ -37,6 +37,16 @@ def diff_means_ci(mean_t, var_t, n_t, mean_c, var_c, n_c, alpha: float = 0.05):
     return d, d - z * se, d + z * se
 
 
+# Минимальный обнаружимый эффект для двустороннего теста: (z_{1-alpha/2} + z_{power}) * SE разницы.
+def mde(se, alpha: float = 0.05, power: float = 0.8):
+    return (stats.norm.ppf(1 - alpha / 2) + stats.norm.ppf(power)) * np.asarray(se)
+
+
+def diff_props_se(k_t, n_t, k_c, n_c):
+    p_t, p_c = np.asarray(k_t) / n_t, np.asarray(k_c) / n_c
+    return np.sqrt(p_t * (1 - p_t) / n_t + p_c * (1 - p_c) / n_c)
+
+
 # Бутстреп разницы средних: клиентов пересэмплирую с возвращением отдельно внутри treatment и control.
 def bootstrap_diff(y_t, y_c, n_boot: int = 1000, seed: int = 42, alpha: float = 0.05):
     rng = np.random.default_rng(seed)
