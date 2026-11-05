@@ -23,6 +23,9 @@ SPLIT_SHARES = {"train": 0.6, "valid": 0.2, "test": 0.2}
 # может сдвинуться раньше после проверки на этапе 2.
 CUTOFF = date(2019, 3, 18)
 
+# Даты в clients на столько часов позже, чем в purchases (этап 1). В staging.sql они сдвигаются назад.
+CLIENTS_TZ_SHIFT = 3
+
 # Возраст вне [AGE_MIN, AGE_MAX] считаю ошибкой и заменяю на NULL.
 AGE_MIN = 14
 AGE_MAX = 100

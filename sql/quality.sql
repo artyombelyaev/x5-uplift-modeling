@@ -112,6 +112,57 @@ from trn
 group by all
 order by all;
 
+-- name: purchase_sum_tolerance
+-- Почему допуск на округление растёт с числом строк: при фиксированном допуске 1 руб. гипотеза
+-- purchase_sum = sum(trn_sum_from_iss) не сходится в 46% чеков, но большая часть из них - округление.
+with trn as (
+    select
+        client_id,
+        transaction_id,
+        any_value(purchase_sum) - sum(trn_sum_from_iss) as diff,
+        -any_value(regular_points_spent) - any_value(express_points_spent) as points_spent,
+        count(*) as n_lines
+    from purchases
+    group by all
+)
+select
+    count(*) as n_transactions,
+    avg((abs(diff) >= 1)::int) as share_mismatch_1rub,
+    avg((abs(diff) >= 1 and points_spent > 0)::int) as with_points_spent,
+    avg((abs(diff) >= 1 and points_spent = 0 and abs(diff) <= 0.5 * n_lines)::int) as no_spend_within_rounding,
+    avg((abs(diff) >= 1 and points_spent = 0 and abs(diff) > 0.5 * n_lines)::int) as no_spend_beyond_rounding
+from trn;
+
+-- name: purchase_sum_mismatch_size
+-- Чеки без списания баллов, где purchase_sum и сумма строк расходятся больше, чем на округление.
+with trn as (
+    select
+        client_id,
+        transaction_id,
+        any_value(purchase_sum) as purchase_sum,
+        sum(trn_sum_from_iss) as iss,
+        -any_value(regular_points_spent) - any_value(express_points_spent) as points_spent,
+        count(*) as n_lines,
+        count(trn_sum_from_red) as n_red_lines
+    from purchases
+    group by all
+),
+m as (
+    select purchase_sum - iss as diff, abs(purchase_sum - iss) / purchase_sum as rel_diff, n_lines
+    from trn
+    where points_spent = 0 and n_red_lines = 0 and abs(purchase_sum - iss) > 0.5 * n_lines
+)
+select
+    count(*) as n_transactions,
+    median(abs(diff)) as median_abs_rub,
+    quantile_cont(abs(diff), 0.95) as p95_abs_rub,
+    median(rel_diff) as median_rel,
+    quantile_cont(rel_diff, 0.95) as p95_rel,
+    avg((abs(diff) <= 5)::int) as share_le_5rub,
+    avg((diff > 0)::int) as share_purchase_sum_greater,
+    median(n_lines) as median_lines
+from m;
+
 -- name: line_values
 select
     count(*) as n_lines,
@@ -168,7 +219,7 @@ group by 1
 order by 1;
 
 -- name: clients_time_offset
--- Даты clients против первых событий в purchases. Беру только клиентов, у которых дата из clients
+-- Исходные даты clients (clients_raw) против первых событий в purchases. Беру только клиентов, у которых дата
 -- попадает в окно истории: раньше начала истории первой покупки или списания не видно.
 with h as (
     select min(transaction_datetime) as first_dt, max(transaction_datetime) as last_dt from purchases
@@ -189,11 +240,11 @@ firsts as (
 ),
 lags as (
     select 'first_issue_date - первая покупка' as what, first_issue_date - first_trn as lag
-    from clients join firsts using (client_id)
+    from clients_raw join firsts using (client_id)
     where first_issue_date between (select first_dt from h) and (select last_dt from h)
     union all
     select 'first_redeem_date - первое списание обычных баллов', first_redeem_date - first_reg_spend
-    from clients join firsts using (client_id)
+    from clients_raw join firsts using (client_id)
     where first_redeem_date between (select first_dt from h) and (select last_dt from h)
 )
 select
@@ -209,7 +260,7 @@ group by what
 order by what;
 
 -- name: spent_before_redeem
--- Есть ли списания баллов раньше first_redeem_date: по исходным датам и после сдвига clients на -3 часа.
+-- Есть ли списания баллов раньше first_redeem_date: по исходным датам и после сдвига.
 with h as (
     select min(transaction_datetime) as first_dt, max(transaction_datetime) as last_dt from purchases
 ),
@@ -227,11 +278,111 @@ first_spend as (
 )
 select
     count(*) as n_clients,
-    count(*) filter (where first_spend_dt < first_redeem_date) as spend_before_redeem_raw,
-    count(*) filter (where first_spend_dt < first_redeem_date - interval 3 hour) as spend_before_redeem_shifted
-from clients
+    count(*) filter (where first_spend_dt < r.first_redeem_date) as spend_before_redeem_raw,
+    count(*) filter (where first_spend_dt < c.first_redeem_date) as spend_before_redeem_shifted
+from clients_raw r
+join clients c using (client_id)
 left join first_spend using (client_id)
-where first_redeem_date between (select first_dt from h) and (select last_dt from h);
+where r.first_redeem_date between (select first_dt from h) and (select last_dt from h);
+
+-- name: shift_reverse_check
+-- Обратная проверка: у клиентов, чья сдвинутая дата попадает в [2018-11-21, CUTOFF], есть ли в purchases
+-- событие ровно в этот момент и в пределах 1 минуты.
+with trn as (
+    select
+        client_id,
+        transaction_id,
+        any_value(transaction_datetime) as dt,
+        any_value(regular_points_spent) as reg_spent,
+        any_value(express_points_spent) as exp_spent
+    from purchases
+    group by all
+),
+redeem as (
+    select c.client_id, c.first_redeem_date as x
+    from clients c
+    where c.first_redeem_date >= date '2018-11-21' and c.first_redeem_date::date <= getvariable('cutoff')
+),
+issue as (
+    select c.client_id, c.first_issue_date as x
+    from clients c
+    where c.first_issue_date >= date '2018-11-21' and c.first_issue_date::date <= getvariable('cutoff')
+),
+first_trn as (
+    select client_id, min(dt) as dt from trn group by client_id
+)
+select
+    'first_redeem_date: чек со списанием любых баллов' as check_,
+    count(distinct r.client_id) as n_clients,
+    count(distinct r.client_id) filter (where t.dt = r.x) / count(distinct r.client_id) as share_exact,
+    count(distinct r.client_id) filter (where abs(epoch(t.dt - r.x)) <= 60) / count(distinct r.client_id) as share_1min
+from redeem r
+left join trn t on t.client_id = r.client_id and t.reg_spent + t.exp_spent < 0
+union all
+select
+    'first_redeem_date: чек со списанием обычных баллов',
+    count(distinct r.client_id),
+    count(distinct r.client_id) filter (where t.dt = r.x) / count(distinct r.client_id),
+    count(distinct r.client_id) filter (where abs(epoch(t.dt - r.x)) <= 60) / count(distinct r.client_id)
+from redeem r
+left join trn t on t.client_id = r.client_id and t.reg_spent < 0
+union all
+select
+    'first_issue_date: первая покупка',
+    count(*),
+    avg((f.dt = i.x)::int),
+    avg((abs(epoch(f.dt - i.x)) <= 60)::int)
+from issue i
+left join first_trn f using (client_id);
+
+-- name: shift_residual
+-- Остаток первой проверки: клиенты, у которых исходная first_redeem_date не ровно на 3 часа позже первого
+-- списания обычных баллов. Есть ли у них после сдвига списание (в том числе только экспресс-баллов) ровно в этот момент.
+with h as (
+    select min(transaction_datetime) as first_dt, max(transaction_datetime) as last_dt from purchases
+),
+trn as (
+    select
+        client_id,
+        transaction_id,
+        any_value(transaction_datetime) as dt,
+        any_value(regular_points_spent) as reg_spent,
+        any_value(express_points_spent) as exp_spent
+    from purchases
+    group by all
+),
+first_reg as (
+    select client_id, min(dt) as dt from trn where reg_spent < 0 group by client_id
+),
+x as (
+    select
+        r.client_id,
+        c.first_redeem_date as shifted,
+        case
+            when f.dt is null then 'нет списаний обычных баллов'
+            when r.first_redeem_date < f.dt then 'обычные баллы списаны позже redeem'
+            else 'разница от 2 до 3 часов'
+        end as grp,
+        epoch(r.first_redeem_date - f.dt) / 3600 as lag_hours
+    from clients_raw r
+    join clients c using (client_id)
+    left join first_reg f using (client_id)
+    where r.first_redeem_date between (select first_dt from h) and (select last_dt from h)
+        and (f.dt is null or r.first_redeem_date - f.dt <> interval 3 hour)
+)
+select
+    grp,
+    count(*) as n_clients,
+    quantile_cont(lag_hours, [0.05, 0.5, 0.95]) as lag_hours_q,
+    count(*) filter (where exists (
+        select 1 from trn t where t.client_id = x.client_id and t.dt = x.shifted and t.reg_spent + t.exp_spent < 0
+    )) as exact_spend_after_shift,
+    count(*) filter (where exists (
+        select 1 from trn t where t.client_id = x.client_id and t.dt = x.shifted and t.exp_spent < 0 and t.reg_spent = 0
+    )) as exact_express_only
+from x
+group by grp
+order by n_clients desc;
 
 -- name: daily
 with trn as (

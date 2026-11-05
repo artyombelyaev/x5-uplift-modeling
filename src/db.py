@@ -19,6 +19,7 @@ def connect() -> duckdb.DuckDBPyConnection:
     }.items():
         con.execute(f"set variable {name} = '{value}'")
     con.execute(f"set variable cutoff = date '{config.CUTOFF}'")
+    con.execute(f"set variable clients_tz_shift = {config.CLIENTS_TZ_SHIFT}")
     con.execute(f"set variable age_min = {config.AGE_MIN}")
     con.execute(f"set variable age_max = {config.AGE_MAX}")
     con.execute(read("staging.sql"))
