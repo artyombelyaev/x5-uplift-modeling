@@ -77,3 +77,24 @@ def test_bootstrap_is_paired_and_keeps_group_sizes():
     b = boot[boot.model == "b"].set_index("rep")
     assert np.allclose(a.qini, b.qini)
     assert boot.rep.nunique() == 20
+
+
+def test_gain_curve_matches_uplift_at_k():
+    rng = np.random.default_rng(4)
+    n = 3_000
+    t = rng.integers(0, 2, n)
+    y = rng.integers(0, 2, n)
+    s = rng.random(n)
+    ks = np.array([0, 0.1, 0.25, 1.0])
+    g = uplift.gain_curve(y, t, s, ks)
+    assert g[0] == 0
+    for k, gk in zip(ks[1:], g[1:]):
+        assert gk == pytest.approx(int(n * k) / n * uplift.uplift_at_k(y, t, s, k)[0])
+    assert g[-1] == pytest.approx(y[t == 1].mean() - y[t == 0].mean())
+
+
+def test_best_share_by_hand():
+    ks = np.array([0, 0.5, 1.0])
+    gain = np.array([0, 0.04, 0.05])
+    # прибыль при r = 0: 0, 0.04, 0.05 -> всем; при r = 0.03: 0, 0.025, 0.02 -> половине; при r = 0.1 -> никому
+    assert uplift.best_share(gain, ks, [0, 0.03, 0.1]).tolist() == [1.0, 0.5, 0.0]

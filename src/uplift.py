@@ -80,3 +80,28 @@ def bootstrap(y, t, scores: dict, n_boot: int = 1000, seed: int = 42, ks=(0.1, 0
 def permutation_baseline(y, t, n_perm: int = 1000, seed: int = 42, ks=(0.1, 0.2, 0.3)) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     return pd.DataFrame([metrics(y, t, rng.permutation(len(y)), ks) for _ in range(n_perm)])
+
+
+# Дополнительные покупатели на одного клиента базы при рассылке первым k по скору: n_k / N * uplift@k,
+# для всей сетки долей за одну сортировку. При k = 0 - ноль.
+def gain_curve(y, t, score, ks):
+    y, t = np.asarray(y), np.asarray(t)
+    order = np.argsort(np.asarray(score), kind="mergesort")[::-1]
+    yy, tt = y[order], t[order]
+    n_t, y_t = np.cumsum(tt), np.cumsum(yy * tt)
+    n_c, y_c = np.cumsum(1 - tt), np.cumsum(yy * (1 - tt))
+    n = np.array([int(len(y) * k) for k in ks])
+    out = np.zeros(len(ks))
+    pos = n > 0
+    i = n[pos] - 1
+    rate_t = np.divide(y_t[i], n_t[i], out=np.full(i.size, np.nan), where=n_t[i] > 0)
+    rate_c = np.divide(y_c[i], n_c[i], out=np.full(i.size, np.nan), where=n_c[i] > 0)
+    out[pos] = n[pos] / len(y) * (rate_t - rate_c)
+    return out
+
+
+# Прибыль на клиента в единицах V: gain(k) - r * k, r = C / V. Для каждого r - доля k с наибольшей прибылью.
+def best_share(gain, ks, rs):
+    ks = np.asarray(ks)
+    profit = np.asarray(gain)[None, :] - np.asarray(rs)[:, None] * ks[None, :]
+    return ks[np.argmax(profit, axis=1)]
