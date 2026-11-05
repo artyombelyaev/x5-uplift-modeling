@@ -16,6 +16,7 @@ def connect() -> duckdb.DuckDBPyConnection:
         "clients_csv": config.CLIENTS_CSV,
         "purchases_parquet": config.PURCHASES_PARQUET,
         "split_parquet": config.SPLIT_PARQUET,
+        "features_parquet": config.FEATURES_PARQUET,
     }.items():
         con.execute(f"set variable {name} = '{value}'")
     con.execute(f"set variable cutoff = date '{config.CUTOFF}'")

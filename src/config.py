@@ -14,6 +14,7 @@ CLIENTS_CSV = RAW_DIR / "clients.csv.gz"
 PURCHASES_CSV = RAW_DIR / "purchases.csv.gz"
 PURCHASES_PARQUET = DATA_DIR / "purchases.parquet"
 SPLIT_PARQUET = DATA_DIR / "split.parquet"
+FEATURES_PARQUET = DATA_DIR / "features.parquet"
 SQL_DIR = ROOT / "sql"
 
 SEED = 42
