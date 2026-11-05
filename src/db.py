@@ -38,3 +38,7 @@ def queries(name: str) -> dict[str, str]:
 
 def run(con: duckdb.DuckDBPyConnection, name: str, query: str) -> pd.DataFrame:
     return con.execute(queries(name)[query]).df()
+
+
+def create_view(con: duckdb.DuckDBPyConnection, name: str, query: str) -> None:
+    con.execute(f"create or replace temp view {query} as {queries(name)[query]}")
