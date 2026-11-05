@@ -117,3 +117,33 @@ select
     count(*) filter (where up10 and pt10) / count(*) filter (where up10) as overlap_top10,
     count(*) filter (where up30 and pt30) / count(*) filter (where up30) as overlap_top30
 from o;
+
+-- name: tied_scores
+-- Доля клиентов, у которых uplift_score совпадает хотя бы с одним другим клиентом той же группы.
+with c as (
+    select in_experiment, count(*) over (partition by in_experiment, uplift_score) as n_same
+    from scores
+)
+select in_experiment, count(*) as n_clients, avg((n_same > 1)::int) as share_tied
+from c
+group by 1
+order by 1 desc;
+
+-- name: decile_transfer
+-- Границы децилей uplift_score, посчитанные в эксперименте, и доля клиентов вне эксперимента выше каждой границы.
+-- Если распределения скоров совпадают, выше нижней границы дециля d должно быть около d x 10% клиентов.
+with bounds as (
+    select uplift_decile, min(uplift_score) as lower_bound
+    from scores
+    where in_experiment
+    group by 1
+)
+select
+    b.uplift_decile,
+    b.lower_bound,
+    b.uplift_decile / 10 as expected_share,
+    avg((s.uplift_score >= b.lower_bound)::int) as share_outside_above
+from bounds b
+cross join (select uplift_score from scores where not in_experiment) s
+group by all
+order by 1;

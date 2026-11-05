@@ -242,3 +242,32 @@ select
     var_samp(v) filter (where treatment_flg = 0) as var_control
 from x
 group by feature;
+
+-- name: population_moments
+-- Среднее и дисперсия каждого признака у клиентов эксперимента и вне его (витрина всех клиентов): из них SMD.
+with x as (
+    unpivot (
+        select (client_id in (select client_id from uplift_train))::int as in_experiment,
+            columns(* exclude (client_id, gender))::double
+        from read_parquet(getvariable('features_all_parquet'))
+    )
+    on columns(* exclude (in_experiment)) into name feature value v
+)
+select
+    feature,
+    avg(v) filter (where in_experiment = 1) as mean_experiment,
+    avg(v) filter (where in_experiment = 0) as mean_outside,
+    var_samp(v) filter (where in_experiment = 1) as var_experiment,
+    var_samp(v) filter (where in_experiment = 0) as var_outside
+from x
+group by feature;
+
+-- name: population_gender
+select
+    (client_id in (select client_id from uplift_train))::int as in_experiment,
+    avg((gender = 'F')::int) as gender_f,
+    avg((gender = 'M')::int) as gender_m,
+    avg((gender = 'U')::int) as gender_u
+from read_parquet(getvariable('features_all_parquet'))
+group by 1
+order by 1 desc;
